@@ -62,36 +62,23 @@ ORDER BY 2 DESC;
 
 -- 4. Calculate dropoff rate by offer type
 WITH funnel_data AS (
-  SELECT 
+    SELECT 
     o.offer_type,
     e.event,
     COUNT(DISTINCT e.customer_id) AS event_count
   FROM events_cleaned e
-  LEFT JOIN offers o ON e.offer_id = o.offer_id
+  JOIN offers o ON e.offer_id = o.offer_id
   WHERE e.event IN ('offer received', 'offer viewed', 'offer completed')
-  GROUP BY o.offer_type, e.event
-),
-ranked_funnel AS (
-  SELECT 
-    offer_type,
-    event,
-    event_count,
-    ROW_NUMBER() OVER (PARTITION BY offer_type ORDER BY event_count DESC) AS step_order,
-    LAG(event_count) OVER (PARTITION BY offer_type ORDER BY event_count DESC) AS previous_count
-  FROM funnel_data
+  GROUP BY 1,2
 )
 SELECT 
-  offer_type,
-  event,
-  event_count,
-  previous_count,
-  ROUND(
-    CASE 
-      WHEN previous_count IS NULL THEN NULL
-      ELSE (previous_count - event_count) * 100.0 / previous_count
-    END, 2
-  ) AS dropoff_rate
-FROM ranked_funnel
-ORDER BY offer_type, step_order;
+    offer_type, 
+    event,
+    event_count,
+    LAG(event_count) OVER (PARTITION BY offer_type ORDER BY event_count DESC) AS previous_count,
+    ROUND((LAG(event_count) OVER (PARTITION BY offer_type ORDER BY event_count DESC) - event_count) * 100.0 / 
+		LAG(event_count, 1) OVER (PARTITION BY offer_type ORDER BY event_count DESC), 2) AS churn_rate
+FROM funnel_data
+ORDER BY 1,3 DESC
 
-
+/* For lag function, need to use PARTITION BY to dissect by offer type. */
