@@ -59,6 +59,34 @@ ORDER BY 2 DESC;
 
 /* The biggest dropoff happens between offer viewed and offer completed (24%). Investigate why and how to optimize this part. */
 
+-- 3.1 Dropoff rate by offer_id
+WITH funnel_data AS (
+  SELECT 
+    o.offer_id,
+    o.offer_type,
+    o.difficulty,
+    o.reward,
+    o.duration,
+    COUNT(DISTINCT CASE WHEN e.event = 'offer viewed' THEN e.customer_id END) AS viewed,
+    COUNT(DISTINCT CASE WHEN e.event = 'offer completed' THEN e.customer_id END) AS completed
+  FROM events_cleaned e
+  JOIN offers o ON e.offer_id = o.offer_id
+  WHERE e.event IN ('offer viewed', 'offer completed')
+  GROUP BY o.offer_id, o.offer_type, o.difficulty, o.reward, o.duration
+)
+SELECT 
+  offer_id,
+  offer_type,
+  difficulty,
+  reward,
+  duration,
+  viewed,
+  completed,
+  ROUND(100.0 * (viewed - completed) / NULLIF(viewed, 0), 2) AS dropoff_rate
+FROM funnel_counts
+WHERE viewed >= 10  -- optional: filter for more statistically meaningful offers
+ORDER BY dropoff_rate DESC;
+
 
 -- 4. Dropoff rate by offer type
 WITH funnel_data AS (
